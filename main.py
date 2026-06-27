@@ -1,13 +1,27 @@
 from fastapi import FastAPI
-app=FastAPI()
-# @app.get("/")
-# def home():
-#     return{"message":"Welcome to employee api!"}
-
 from sqlalchemy import create_engine, text
 import pandas as pd
-
+from pydantic import BaseModel
+import os
+app=FastAPI()
+# Absolute path always points to correct database
+Base_Dir=os.path.dirname(os.path.abspath(__file__))
+DB_Path=os.path.join(Base_Dir,"employee_mgmt.db")
 engine=create_engine("sqlite:///employee_mgmt.db",echo=False)
+
+#Create database on startup
+with engine.begin() as conn:
+    conn.execute(text("""Create table if not exists employees(
+                      id integer Primary Key AUTOINCREMENT,
+                      name text not null,
+                      salary real not null,
+                      department text not null)"""))
+
+#This defines what data my API expects
+class Employee(BaseModel):
+    name: str
+    salary: float
+    department: str
 
 @app.get("/employees")
 def get_emp():
@@ -16,20 +30,12 @@ def get_emp():
         df=pd.DataFrame(result.fetchall(),columns=result.keys())
     return df.to_dict(orient="records")
 
-from pydantic import BaseModel
-
-#This defines what data my API expects
-class Employee(BaseModel):
-    name: str
-    salary: float
-    department: str
-
 #Post-add employee
 @app.post("/employees")
 def add_emp(emp: Employee):
     with engine.begin() as conn:
         conn.execute(text("""Insert into employees(name,salary,department) 
-                          values(:name,:salary,:department)"""),{"name":emp.name,"salary":emp.salary,"depatment":emp.department})
+                          values(:name,:salary,:department)"""),{"name":emp.name,"salary":emp.salary,"department":emp.department})
     return {"message": f"{emp.name} added successfully!"}
 
 #Put-update salary
