@@ -1,0 +1,4 @@
+.env
+employee_mgmt.db
+__pyache__/
+*.pyc
