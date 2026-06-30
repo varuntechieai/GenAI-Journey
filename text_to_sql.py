@@ -54,7 +54,13 @@ Sample data:
 - departments are exactly: 'HR', 'Tech', 'Finance'
 - salaries are numbers like 45000, 85000
 
-Return ONLY the SQL query. No explanations. No markdown. No backticks.Also give the alias to result as columns like for count-Total count and likewise
+Important rules:
+- Always use column aliases with AS for aggregate functions (COUNT, AVG, MAX, MIN, SUM)
+- Aliases must be single words using underscores, NEVER use spaces in aliases
+- Example: SELECT COUNT(*) AS total_count FROM employees
+- Example: SELECT name AS employee_name FROM employees
+- Do NOT add aliases to simple SELECT * or plain column selections unless necessary
+- Return ONLY the SQL query. No explanations. No markdown. No backticks.Also give the alias to result as columns like for count-Total count and likewise
 
 
     Question: {user_question}
@@ -81,6 +87,17 @@ def execute_sql(sql_query):
     except Exception as e:
         return f" Error executing sql: {str(e)}"
 
+#Safety guardrails
+def is_safe_query(sql_query):
+    """Check if SQL query is safe (read only)"""
+    dangerous_keywords=["DELETE","DROP","TRUNCATE","UPDATE","INSERT","ALTER"]
+    sql_upper=sql_query.upper()
+
+    for keyword in dangerous_keywords:
+        if keyword in sql_upper:
+            return False
+    return True
+
 #Tep 3 - Combine both into one function
 def ask_database(user_question):
     print(f"\n Question: {user_question}")
@@ -88,6 +105,9 @@ def ask_database(user_question):
     #Convert into SQL
     sql=natural_lang_sql(user_question)
     print(f" Generated sql: {sql}")
+    if not is_safe_query(sql):
+        print("⛔ This query could modify or delete data. Blocked for safety.")
+        return None
 
     #Execute sql
     result=execute_sql(sql)
