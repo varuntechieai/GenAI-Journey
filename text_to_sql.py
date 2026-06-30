@@ -54,7 +54,7 @@ Sample data:
 - departments are exactly: 'HR', 'Tech', 'Finance'
 - salaries are numbers like 45000, 85000
 
-Return ONLY the SQL query. No explanations. No markdown. No backticks.
+Return ONLY the SQL query. No explanations. No markdown. No backticks.Also give the alias to result as columns like for count-Total count and likewise
 
 
     Question: {user_question}
@@ -96,10 +96,28 @@ def ask_database(user_question):
     return result
 
 #Test with questions
-ask_database("Show me all employees in Tech department")
-ask_database("Who is the highest paid employee?")
-ask_database("Show me average salary by department")
-ask_database("How many employees are in each department?")
-ask_database("Show me employees earning more than 50000")
-ask_database("Who earns the least in HR department?")
+# ask_database("Show me all employees in Tech department")
+# ask_database("Who is the highest paid employee?")
+# ask_database("Show me average salary by department")
+# ask_database("How many employees are in each department?")
+# ask_database("Show me employees earning more than 50000")
+# ask_database("Who earns the least in HR department?")
 
+# =====================
+# Interactive Chat Loop
+# =====================
+def chat_loop():
+    print("="*50)
+    print("🤖 Text to SQL AI Assistant")
+    print("Ask questions about your employee database")
+    print("Type 'exit' to quit")
+    print("="*50)
+
+    while True:
+        user_question=input("\n💬 You: ")
+        if user_question.lower()=="exit":
+            print("👋 Goodbye Varun")
+            break
+        ask_database(user_question)
+#Run the chat
+chat_loop()
