@@ -10,38 +10,35 @@ load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# ==================
-# Step 1 - Load Document
-# ==================
-def load_document(file_path):
-    loader = TextLoader(file_path)
-    documents = loader.load()
-    print(f"✅ Loaded document: {file_path}")
-    print(f"📄 Total characters: {len(documents[0].page_content)}")
-    return documents
+# ================================
+# Step 1 - Load Multiple Documents
+# ================================
+def load_documents(file_paths):
+    all_documents=[]
+    for file_path in file_paths:
+        loader = TextLoader(file_path)
+        docs=loader.load()
+        documents = loader.load()
+        # Add source metadata to each document
+        for doc in docs:
+            doc.metadata["source"]=file_path
+        all_documents.extend(docs)
+        print(f"✅ Loaded document: {file_path}")
+    print(f"📄 Total documents loaded: {len(all_documents)}")
+    return all_documents
 
 # ==========================
-# Step 2 - Split into Chunks
+# Step 2 - Split Documents into Chunks
 # ==========================
 def split_documents(documents):
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=200,
-        chunk_overlap=50
+        chunk_overlap=50,
+        separators=["\n\n","\n","-","."," ",""]
     )
     chunks = splitter.split_documents(documents)
     print(f"✅ Split into {len(chunks)} chunks")
     return chunks
-
-# Test Steps 1 & 2
-docs = load_document("company_policy.txt")
-chunks = split_documents(docs)
-
-# Print first 3 chunks to see what they look like
-print("\n--- Sample Chunks ---")
-for i, chunk in enumerate(chunks[:3]):
-    print(f"\nChunk {i+1}:")
-    print(chunk.page_content)
-    print("-" * 30)
 
 # =========================================
 # Step 3 - Create Embeddings + Vector Store
@@ -55,7 +52,13 @@ def create_vector_store(chunks):
     print("Vector Store created")
     return vector_store
 
-#Test step 3
+#Load all documents
+documents=load_documents([
+    "company_policy.txt",
+    "finance_policy.txt",
+    "tech_policy.txt"
+])
+chunks=split_documents(documents)
 vector_store=create_vector_store(chunks)
 
 # ===============================
@@ -99,9 +102,14 @@ def ask_document(question,vector_store):
 #Search relevant chunks
     rlv_chunks=search_rlv_chunks(vector_store,question)
 
+#Show which documents were used
+    sources=list(set([chunk.metadata["source"] for chunk in rlv_chunks]))
+    print(f"Sources used: {sources}")
+
 #Generate answer
     answer=generate_answer(question,rlv_chunks)
     print(f"\n Answer: {answer}")
+    print(f"\n Referenced from: {', '.join(sources)}")
     return answer
 
 #Test it
