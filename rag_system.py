@@ -72,45 +72,35 @@ def search_rlv_chunks(vector_store,question,k=3):
 # ===============================
 # STep 5 - Generate using Llama 3
 # ===============================
-def generate_answer(question,rlv_chunks):
+def generate_answer(question,rlv_chunks,conversation_history=[]):
     context="\n\n".join([chunk.page_content for chunk in rlv_chunks])
-    prompt=f"""
-You are a helpful HR assistant. Answer the question based ONLY on the context provided below.
-If the answer is not in the context, say "I don't have that information in my documents."
 
-Context:
+    #Build messages with History
+    messages=[
+        {
+            "role":"system",
+            "content":"""You are a helpful HR assistant.
+        Answer questions based only on the context provided.
+        If answer is not in context say I don't have that information."""
+        }
+    ]
+    #Add conversation history
+    for msg in conversation_history:
+        messages.append(msg)
+    #Add current question with context
+    messages.append({
+        "role":"user",
+        "content":f"""Context:
 {context}
-Question: {question}
-
-Answer="""
+Question: {question}"""
+    })
     response=client.chat.completions.create(
         model="llama-3.1-8b-instant",
         temperature=0,
-        messages=[
-            {"role":"system","content":"You are a helpful HR assistant. Answer only from the provided context."},
-            {"role":"user","content":prompt}
-        ]
+        messages=messages
     )
+       
     return response.choices[0].message.content.strip()
-
-# ===============================
-# STep 6 - Complete RAG Pipeline
-# ===============================
-def ask_document(question,vector_store):
-    print(f"\nQuestion: {question}")
-
-#Search relevant chunks
-    rlv_chunks=search_rlv_chunks(vector_store,question)
-
-#Show which documents were used
-    sources=list(set([chunk.metadata["source"] for chunk in rlv_chunks]))
-    print(f"Sources used: {sources}")
-
-#Generate answer
-    answer=generate_answer(question,rlv_chunks)
-    print(f"\n Answer: {answer}")
-    print(f"\n Referenced from: {', '.join(sources)}")
-    return answer
 
 #Test it
 # ask_document("How many paid leaves do employee get",vector_store)
@@ -127,13 +117,36 @@ def rag_chat(vector_store):
     print("Type 'exit' to quit")
     print("=" * 50)
 
+    #Memory - stores conversation history
+    conversation_history=[]
+
     while True:
         question=input("\n You: ")
         if question.lower()=="exit":
             print("Goodbye Varun!")
             break
-        ask_document(question,vector_store)
+        #Search relevant chunks
+        rlv_chunks=search_rlv_chunks(vector_store,question)
+        sources=list(set([chunk.metadata["source"] for chunk in rlv_chunks]))
+
+        #Generate answer with memory
+        answer = generate_answer(question, rlv_chunks, conversation_history)
+        
+        print(f"\n🤖 Answer: {answer}")
+        print(f"📌 Source: {', '.join(sources)}")
+
+         # Update conversation history
+        conversation_history.append({"role": "user", "content": question})
+        conversation_history.append({"role": "assistant", "content": answer})
 
 #Run interactive chat
+documents=load_documents([
+    "company_policy.txt",
+    "tech_policy.txt",
+    "finance_policy.txt"
+])
+chunks = split_documents(documents)
+vector_store = create_vector_store(chunks)
 rag_chat(vector_store)
+
 
