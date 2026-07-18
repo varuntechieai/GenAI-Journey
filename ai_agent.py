@@ -1,39 +1,91 @@
 from groq import Groq
 from dotenv import load_dotenv
 import os
+from sqlalchemy import create_engine,text
+import pandas as pd
+
+#Setup tool database
+engine=create_engine("sqlite:///agent.db",echo=False)
+
+def setup_database():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            Create table if not exists employees(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                salary REAL NOT NULL,
+                department TEXT NOT NULL,
+                experience INTEGER NOT NULL)"""))
+        conn.execute(text("Delete from employees"))
+        employees_data = [
+            {"name": "Varun", "salary": 80000, "department": "Tech", "experience": 6},
+            {"name": "Kenny", "salary": 85000, "department": "Tech", "experience": 8},
+            {"name": "Priya", "salary": 24000, "department": "HR", "experience": 2},
+            {"name": "Rahul", "salary": 45000, "department": "HR", "experience": 4},
+            {"name": "Karan", "salary": 54000, "department": "Tech", "experience": 5},
+            {"name": "Ashu", "salary": 22000, "department": "Finance", "experience": 1},
+            {"name": "Rita", "salary": 67000, "department": "Tech", "experience": 7},
+            {"name": "Sneha", "salary": 39000, "department": "HR", "experience": 3},
+        ]
+
+        for emp in employees_data:
+            conn.execute(text("""
+                INSERT INTO employees (name, salary, department, experience)
+                VALUES (:name, :salary, :department, :experience)
+            """), emp)
+
+    print("✅ Database ready!")
+
+setup_database()
 
 load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ==================
-# Tools
+# Real Database Tools
 # ==================
-def calculate(expression):
-    try:
-        result = eval(expression)
-        return str(result)
-    except Exception as e:
-        return f"Error: {str(e)}"
-
 def search_employee(name):
-    employees = {
-        "Varun": {"salary": 80000, "department": "Tech"},
-        "Kenny": {"salary": 85000, "department": "Tech"},
-        "Priya": {"salary": 24000, "department": "HR"},
-        "Rahul": {"salary": 45000, "department": "HR"},
-    }
-    if name in employees:
-        emp = employees[name]
-        return f"{name} - Department: {emp['department']}, Salary: {emp['salary']}"
+    with engine.begin() as conn:
+        result = conn.execute(text("""
+            SELECT name, salary, department, experience 
+            FROM employees 
+            WHERE name = :name
+        """), {"name": name})
+        row = result.fetchone()
+    
+    if row:
+        return f"{row[0]} - Department: {row[2]}, Salary: {row[1]}, Experience: {row[3]} years"
     return f"{name} not found"
 
 def get_department_info(department):
-    departments = {
-        "Tech": "4 employees, average salary 77500",
-        "HR": "3 employees, average salary 36000",
-        "Finance": "1 employee, average salary 22000"
-    }
-    return departments.get(department, "Department not found")
+    with engine.begin() as conn:
+        result = conn.execute(text("""
+            SELECT 
+                COUNT(*) as total,
+                AVG(salary) as avg_salary,
+                MAX(salary) as max_salary,
+                MIN(salary) as min_salary
+            FROM employees
+            WHERE department = :department
+        """), {"department": department})
+        row = result.fetchone()
+    
+    if row and row[0] > 0:
+        return f"{department} - Total: {row[0]} employees, Avg Salary: {round(row[1])}, Max: {row[2]}, Min: {row[3]}"
+    return f"Department {department} not found"
+
+def get_all_employees():
+    with engine.begin() as conn:
+        result = conn.execute(text("SELECT name, salary, department, experience FROM employees"))
+        df = pd.DataFrame(result.fetchall(), columns=result.keys())
+    return df.to_string()
+
+def calculate(expression):
+    try:
+        result = eval(expression)
+        return str(round(float(result), 2))
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 # ==================
 # Agent
@@ -48,6 +100,7 @@ def run_agent(user_request):
 TOOLS:
 - search_employee("name") → returns employee salary and department
 - get_department_info("department") → returns department statistics
+- get_all_employees() → returns all employees list
 - calculate("expression") → calculates math using numbers only
 
 STRICT RULES:
@@ -95,6 +148,9 @@ FINAL: Varun's salary is 80000 and he works in Tech department."""
         elif 'get_department_info("' in reply:
             dept = reply.split('get_department_info("')[1].split('"')[0]
             tool_result = get_department_info(dept)
+        
+        elif 'get_all_employees()' in reply:
+            tool_result = get_all_employees()
 
         elif 'calculate("' in reply:
             expr = reply.split('calculate("')[1].split('"')[0]
@@ -120,6 +176,7 @@ FINAL: Varun's salary is 80000 and he works in Tech department."""
 # ==================
 # Test
 # ==================
-run_agent("What is Varun's salary and which department does he work in?")
-run_agent("What is 20% bonus on Kenny's salary?")
-run_agent("Tell me about the Tech department")
+run_agent("What is Varun's salary and experience?")
+run_agent("Compare HR and Tech departments")
+run_agent("Who has the most experience in Tech?")
+run_agent("What is 30% bonus on Rita's salary?")
